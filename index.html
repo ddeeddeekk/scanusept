@@ -2,32 +2,23 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <!-- PWA: identitas aplikasi -->
-  <link rel="manifest" href="./manifest.json">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sistem Pemindai & Verifikasi Peserta Ujian - Supabase</title>
+  
+  <!-- PWA Manifest via Data URI -->
+  <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22Scanner%20Peserta%20Ujian%22%2C%22short_name%22%3A%22ScanUjian%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23065f46%22%2C%22theme_color%22%3A%22%23065f46%22%7D">
   <meta name="theme-color" content="#065f46">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Cek Peserta">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="icon" type="image/png" href="./icon-192.png">
-  <link rel="apple-touch-icon" href="./icon-192.png">
-  <title>Sistem Pemindai & Verifikasi Peserta Ujian</title>
+  
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <!-- HTML5 QR Code Scanner Library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <!-- Supabase JS Client Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
-    /* CSS Guardrail: Sembunyikan elemen bawaan template Blogger */
-    .post-title, .blog-header, .sidebar, #header, #footer, .post-footer, .comments {
-      display: none !important;
-    }
-    /* Area aman layar HP (poni/notch & bar gestur) saat berjalan sebagai aplikasi */
-    nav.fixed { padding-bottom: env(safe-area-inset-bottom, 0px); }
-    body { padding-top: env(safe-area-inset-top, 0px); overscroll-behavior-y: none; }
     body {
       background-color: #f6f8f6;
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -67,32 +58,48 @@
       background: #a7d7c5;
       border-radius: 999px;
     }
+    .custom-modal-backdrop {
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(4px);
+    }
   </style>
 </head>
-<body class="min-h-screen text-slate-800 flex flex-col justify-between selection:bg-emerald-600 selection:text-white pb-20">
+<body class="min-h-screen text-slate-800 flex flex-col justify-between selection:bg-emerald-600 selection:text-white pb-24">
 
-  <!-- SAKLAR DEPLOYMENT & INISIALISASI -->
-  <script>
-    // ==========================================
-    // KONFIGURASI APLIKASI
-    // Ubah IS_PREVIEW ke false jika sudah menempelkan URL Web App GAS
-    const IS_PREVIEW = false;
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbxvzhWnknJNqye97ZUB5brVAM72XLGVM4QGpCrJ0zJnz_57n-tDfGEfEwMYlTzQbmQjpw/exec";
-    // ==========================================
+  <!-- TOP HEADER & STATUS BAR -->
+  <header class="bg-emerald-900 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-4xl mx-auto px-4 py-2.5 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-emerald-700/80 border border-emerald-500/50 flex items-center justify-center text-emerald-300 font-bold shadow-inner">
+          <i class="fa-solid fa-qrcode text-base"></i>
+        </div>
+        <div>
+          <h1 class="text-xs sm:text-sm font-black tracking-wide leading-tight">VERIFIKASI PESERTA UJIAN</h1>
+          <p class="text-[10px] text-emerald-300 font-medium flex items-center gap-1.5">
+            <span id="badge-db-status" class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span id="label-db-backend">Supabase Cloud Active</span>
+          </p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <!-- Tombol Konfigurasi / SQL Guide Modal -->
+        <button onclick="toggleConfigModal(true)" class="p-2 rounded-xl bg-emerald-800/90 hover:bg-emerald-700 active:scale-95 text-emerald-100 border border-emerald-600/50 text-xs font-semibold flex items-center gap-1.5 transition" title="Konfigurasi Supabase & SQL">
+          <i class="fa-solid fa-database"></i>
+          <span class="hidden sm:inline">Koneksi Supabase</span>
+        </button>
+      </div>
+    </div>
+  </header>
 
-    // Offset Formula Spreadsheet: ASCII = Kode Angka - 348
-    const ASCII_OFFSET = 348;
-  </script>
-
-  <!-- TOAST NOTIFIKASI ELEGAN TANPA ALERT BROWSER -->
-  <div id="toast-notify" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-[-10px] w-11/12 max-w-sm">
-    <div id="toast-box" class="px-3.5 py-2.5 rounded-xl shadow-lg border text-xs font-semibold flex items-center gap-2 justify-center bg-emerald-800 text-white border-emerald-700">
+  <!-- TOAST NOTIFIKASI ELEGAN -->
+  <div id="toast-notify" class="fixed top-14 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 translate-y-[-10px] w-11/12 max-w-sm">
+    <div id="toast-box" class="px-3.5 py-2.5 rounded-xl shadow-xl border text-xs font-semibold flex items-center gap-2 justify-center bg-emerald-800 text-white border-emerald-700">
       <i id="toast-icon" class="fa-solid fa-circle-check"></i>
       <span id="toast-msg">Data tersimpan otomatis</span>
     </div>
   </div>
 
-  <!-- POPUP OVERLAY NOTIFIKASI BESAR & JELAS SAAT DATA TERSIMPAN -->
+  <!-- POPUP OVERLAY NOTIFIKASI BESAR SAAT DATA TERSIMPAN -->
   <div id="large-save-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs transition-all duration-300 opacity-0 pointer-events-none scale-95">
     <div class="bg-white rounded-3xl p-6 sm:p-7 shadow-2xl border-2 border-emerald-500 w-full max-w-xs sm:max-w-sm text-center transform transition-all duration-300 space-y-3">
       <!-- Foto Peserta di Pop-up Modal -->
@@ -126,26 +133,14 @@
   <!-- KONTEN UTAMA -->
   <main class="max-w-4xl mx-auto px-3.5 sm:px-5 py-3 flex-1 w-full space-y-3">
 
-    <!-- BANNER PASANG APLIKASI (muncul hanya jika belum terpasang) -->
-    <div id="install-banner" class="hidden bg-emerald-800 text-white rounded-2xl px-3.5 py-2.5 shadow-md flex items-center gap-2.5">
-      <i class="fa-solid fa-mobile-screen-button text-lg text-emerald-300 flex-shrink-0"></i>
-      <p id="install-text" class="flex-1 text-[11px] sm:text-xs leading-snug font-medium">Pasang aplikasi ini di layar utama agar terbuka seperti aplikasi biasa.</p>
-      <button id="btn-install" type="button" class="flex-shrink-0 px-3 py-1.5 bg-white text-emerald-900 rounded-xl text-xs font-bold active:scale-95 transition">Pasang</button>
-      <button id="btn-install-close" type="button" class="flex-shrink-0 w-7 h-7 rounded-full text-emerald-200 hover:bg-emerald-700 active:scale-95 transition" aria-label="Tutup">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-
     <!-- ==================== TAB 1: PEMINDAI & VERIFIKASI ==================== -->
     <section id="section-scanner" class="block space-y-3">
       <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
         
-        <!-- KOLOM ATAS / KIRI: PEMINDAI -->
+        <!-- KOLOM KIRI: PEMINDAI KAMERA -->
         <div class="md:col-span-5 space-y-2.5">
-          
-          <!-- Box Kamera Pemindai -->
           <div class="bg-white rounded-2xl shadow-xs border border-emerald-100/90 p-3 sm:p-4">
-            <!-- Kamera Viewport Responsif: Bentuk Bujur Sangkar Presisi 1:1 Tanpa Sisa Ruang Hitam -->
+            <!-- Kamera Viewport 1:1 Presisi -->
             <div class="w-full max-w-[240px] mx-auto aspect-square">
               <div id="reader" class="w-full h-full bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center text-slate-400 relative border border-slate-800 shadow-inner">
                 <div id="camera-placeholder" class="text-center p-5 z-10">
@@ -155,28 +150,24 @@
               </div>
             </div>
 
-            <!-- Kontrol Kamera & Pilihan Lensa (Sejajar dalam 1 Baris) -->
+            <!-- Kontrol Kamera & Pilihan Lensa -->
             <div class="mt-2.5 space-y-2">
               <div class="grid grid-cols-12 gap-1.5 items-center">
-                <!-- Tombol Buka Kamera -->
                 <button id="btn-start-camera" onclick="startScanner()" class="col-span-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-xs">
                   <i class="fa-solid fa-camera"></i> <span>Buka Kamera</span>
                 </button>
                 
-                <!-- Tombol Matikan Kamera -->
                 <button id="btn-stop-camera" onclick="stopScanner()" class="col-span-4 py-2.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-600 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5 disabled:opacity-40" disabled>
                   <i class="fa-solid fa-stop"></i> <span>Matikan</span>
                 </button>
 
-                <!-- Tombol Toggle Pengaturan Kamera / Lensa -->
                 <button id="btn-toggle-cam-settings" onclick="toggleCameraSettings()" class="col-span-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 active:scale-95 text-emerald-800 border border-emerald-200 rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1" title="Pengaturan Lensa & Zoom">
                   <i class="fa-solid fa-sliders"></i> <span class="hidden xs:inline">Lensa</span>
                 </button>
               </div>
 
-              <!-- Panel Pengaturan Lensa & Zoom (Expandable / Ramping) -->
+              <!-- Panel Pengaturan Lensa & Zoom -->
               <div id="cam-settings-panel" class="hidden bg-slate-50 border border-slate-200/90 rounded-xl p-2.5 space-y-2 text-xs transition-all">
-                <!-- Pilihan Kamera Dropdown -->
                 <div class="flex items-center gap-2">
                   <label for="camera-select" class="text-[10px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">
                     <i class="fa-solid fa-camera-rotate mr-0.5 text-emerald-600"></i> Lensa:
@@ -186,7 +177,6 @@
                   </select>
                 </div>
 
-                <!-- Kontrol Zoom Digital Cepat -->
                 <div id="zoom-control-container" class="hidden flex items-center justify-between gap-2 pt-1 border-t border-slate-200/70">
                   <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     <i class="fa-solid fa-magnifying-glass-plus mr-0.5 text-emerald-600"></i> Zoom:
@@ -201,17 +191,15 @@
               </div>
             </div>
           </div>
-
         </div>
 
-        <!-- KOLOM BAWAH / KANAN: HASIL VERIFIKASI PESERTA ELEGAN -->
+        <!-- KOLOM KANAN: HASIL VERIFIKASI PESERTA -->
         <div class="md:col-span-7 space-y-3">
           <div class="bg-white rounded-2xl shadow-xs border border-emerald-100/90 p-4 sm:p-5 flex flex-col justify-between">
             <div class="space-y-2.5">
               
-              <!-- BLOK ATAS: FOTO (KIRI) + (NO. PESERTA & NO. KURSI + NAMA PESERTA DI BAWAHNYA) (KANAN) -->
+              <!-- FOTO & INFO PESERTA -->
               <div class="flex gap-2.5 items-stretch">
-                <!-- Wadah Foto Peserta (Tinggi Menyesuaikan Kolom Kanan) -->
                 <div class="w-24 sm:w-28 flex-shrink-0 bg-slate-50/80 rounded-2xl border border-slate-200/80 overflow-hidden relative flex items-center justify-center shadow-2xs">
                   <img id="val-foto-peserta" src="" alt="Foto" class="w-full h-full object-cover hidden" onerror="handlePhotoError()">
                   <div id="val-foto-placeholder" class="text-center p-2 text-slate-400">
@@ -220,18 +208,13 @@
                   </div>
                 </div>
 
-                <!-- Kolom Kanan: Baris 1 (No. Peserta & No. Kursi/Ruang) + Baris 2 (Nama Peserta) -->
                 <div class="flex-1 flex flex-col justify-between gap-2 min-w-0">
-                  
-                  <!-- Baris 1: No. Peserta & No. Kursi Berdampingan -->
                   <div class="grid grid-cols-2 gap-2 min-w-0">
-                    <!-- Box No. Peserta -->
                     <div class="bg-emerald-50/40 p-2 sm:p-2.5 rounded-2xl border border-emerald-200/70 flex flex-col justify-center min-w-0 overflow-hidden">
                       <span class="text-[8px] sm:text-[9px] font-bold text-emerald-800 uppercase tracking-wider block truncate">NO. PESERTA</span>
                       <span id="val-no-peserta" class="text-xs sm:text-sm font-bold text-emerald-950 font-mono tracking-tight truncate leading-tight mt-0.5">-</span>
                     </div>
 
-                    <!-- Box No. Kursi (Nomor Kursi 02, 04, 40... dan Nama Ruang di Bawahnya) -->
                     <div class="bg-emerald-500/10 p-2 sm:p-2.5 rounded-2xl border border-emerald-300/60 flex flex-col justify-center min-w-0 overflow-hidden">
                       <div class="flex items-center justify-between gap-1">
                         <span class="text-[8px] sm:text-[9px] font-bold text-emerald-900 uppercase tracking-wider truncate">NO. KURSI</span>
@@ -241,18 +224,15 @@
                     </div>
                   </div>
 
-                  <!-- Baris 2: Nama Peserta Membentang Penuh di Bawah No. Peserta & No. Kursi (Dibuat bisa 2 baris untuk nama panjang) -->
                   <div class="bg-slate-50/90 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 flex flex-col justify-center min-w-0">
                     <span class="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider block">NAMA PESERTA</span>
                     <span id="val-nama" class="text-sm sm:text-base font-black text-slate-800 uppercase block mt-0.5 tracking-wide leading-snug line-clamp-2 break-words whitespace-normal">-</span>
                   </div>
-
                 </div>
               </div>
 
-              <!-- BLOK BAWAH: TGL. TES (LEBIH LEBAR) & SESI (DIRAMPINGKAN) BERDAMPINGAN -->
+              <!-- TANGGAL TES & SESI -->
               <div class="grid grid-cols-12 gap-2">
-                <!-- Box Tanggal Tes (Diperlebar ke col-span-8) -->
                 <div id="box-tgl-tes" class="col-span-8 bg-slate-50/90 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 transition-colors duration-200 flex flex-col justify-center min-w-0 overflow-hidden">
                   <div class="flex items-center justify-between gap-1">
                     <span id="lbl-tgl-tes" class="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">TGL. TES</span>
@@ -263,7 +243,6 @@
                   <span id="val-tgl-tes" class="text-[13px] sm:text-[15px] font-bold text-slate-800 block mt-0.5 leading-snug truncate">-</span>
                 </div>
 
-                <!-- Box Sesi (Dirampingkan ke col-span-4) -->
                 <div id="box-waktu" class="col-span-4 bg-slate-50/90 p-2 sm:p-2.5 rounded-2xl border border-slate-200/80 flex flex-col justify-center transition-colors duration-200 min-w-0 overflow-hidden">
                   <div class="flex items-center justify-between gap-1">
                     <span id="lbl-waktu" class="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">SESI</span>
@@ -275,20 +254,20 @@
                 </div>
               </div>
 
-              <!-- Form Catatan Petugas -->
+              <!-- Catatan Petugas -->
               <div>
                 <input type="text" id="scan-note" placeholder="Catatan petugas (opsional): Verifikasi berkas fisik" class="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-slate-50/50">
               </div>
             </div>
 
-            <!-- Tombol Simpan Manual (Jarak Spasi Atas & Bawah Dipersempit) -->
+            <!-- Tombol Simpan Manual -->
             <div class="mt-2 pt-1.5 border-t border-slate-100">
               <div id="warning-notice-manual" class="hidden mb-1.5 p-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] flex items-center gap-1.5 font-medium">
                 <i class="fa-solid fa-triangle-exclamation text-rose-600 flex-shrink-0"></i>
                 <span>Jadwal tidak sesuai! Tekan Simpan jika tetap diizinkan.</span>
               </div>
               <button id="btn-save-record" onclick="saveCurrentRecord(true)" class="w-full py-2.5 bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white rounded-xl font-bold text-xs sm:text-sm transition flex items-center justify-center gap-2 shadow-xs disabled:opacity-40" disabled>
-                <i class="fa-solid fa-floppy-disk"></i> <span id="lbl-save-button">Simpan ke Kehadiran</span>
+                <i class="fa-solid fa-floppy-disk"></i> <span id="lbl-save-button">Simpan ke Supabase</span>
               </button>
             </div>
           </div>
@@ -301,30 +280,33 @@
     <section id="section-history" class="hidden space-y-3">
       <div class="bg-white rounded-2xl shadow-xs border border-emerald-100/90 p-3 sm:p-4 space-y-3">
         
-        <!-- HEADER TABEL LOG: JUDUL & PENCARIAN -->
+        <!-- HEADER TABEL LOG -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
           <div>
-            <h2 class="text-sm sm:text-base font-black text-slate-800">Log Kehadiran Peserta</h2>
-            <p class="text-[11px] text-slate-400">Daftar verifikasi peserta yang tersimpan dalam sistem.</p>
+            <h2 class="text-sm sm:text-base font-black text-slate-800">Log Kehadiran Peserta (Supabase)</h2>
+            <p class="text-[11px] text-slate-400">Sinkronisasi langsung dengan database cloud PostgreSQL Supabase.</p>
           </div>
           <div class="flex items-center gap-1.5">
             <div class="relative flex-1 sm:flex-initial">
               <input type="text" id="history-search" oninput="filterHistoryTable()" placeholder="Cari peserta..." class="py-1.5 pl-7 pr-2.5 text-xs border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none w-full sm:w-48 bg-slate-50/50">
+              <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-slate-400 text-[10px]"></i>
             </div>
+            <button onclick="refreshData(false)" class="py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold flex items-center gap-1 transition" title="Refresh Data">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
             <button onclick="exportCSV()" class="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1 transition shadow-xs" title="Ekspor CSV">
               <i class="fa-solid fa-file-excel"></i> <span>Ekspor</span>
             </button>
           </div>
         </div>
 
-        <!-- PANEL STATISTIK RINGKASAN JUMLAH KEHADIRAN (SANGAT JELAS TERBACA) -->
+        <!-- PANEL STATISTIK RINGKASAN KEHADIRAN -->
         <div class="bg-slate-50 border border-slate-200/90 rounded-2xl p-3">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
             <div class="flex items-center gap-1.5">
               <i class="fa-solid fa-chart-simple text-emerald-700 text-xs"></i>
               <span class="text-[11px] font-black uppercase tracking-wider text-slate-700">RINGKASAN KEHADIRAN SAAT INI</span>
             </div>
-            <!-- TANGGAL DAN SESI BERJALAN SAAT INI -->
             <div class="flex items-center gap-1.5 text-[10px] font-bold">
               <span id="stat-info-tgl" class="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-700 font-mono shadow-2xs">-</span>
               <span id="stat-info-sesi" class="px-2 py-0.5 rounded-md bg-emerald-100/80 border border-emerald-300 text-emerald-800 uppercase tracking-tight shadow-2xs">-</span>
@@ -332,19 +314,14 @@
           </div>
 
           <div class="grid grid-cols-3 gap-2">
-            <!-- Total Hari & Sesi Ini -->
             <div class="bg-white rounded-xl p-2.5 border border-emerald-200 shadow-2xs text-center flex flex-col justify-center">
               <span class="text-[9px] font-bold uppercase text-slate-400 tracking-wider">TOTAL</span>
               <span id="stat-total-session" class="text-xl sm:text-2xl font-black text-emerald-800 font-mono mt-0.5">0</span>
             </div>
-
-            <!-- LT. 2 Sesi Ini -->
             <div class="bg-white rounded-xl p-2.5 border border-slate-200 shadow-2xs text-center flex flex-col justify-center">
               <span class="text-[9px] font-bold uppercase text-emerald-700 tracking-wider">LT. 2</span>
               <span id="stat-lt2-session" class="text-xl sm:text-2xl font-black text-slate-900 font-mono mt-0.5">0</span>
             </div>
-
-            <!-- LT. 3 Sesi Ini -->
             <div class="bg-white rounded-xl p-2.5 border border-slate-200 shadow-2xs text-center flex flex-col justify-center">
               <span class="text-[9px] font-bold uppercase text-emerald-700 tracking-wider">LT. 3</span>
               <span id="stat-lt3-session" class="text-xl sm:text-2xl font-black text-slate-900 font-mono mt-0.5">0</span>
@@ -353,10 +330,10 @@
         </div>
 
         <!-- Tabel Log Riwayat -->
-        <div class="overflow-x-auto rounded-xl border border-slate-200/80">
+        <div class="overflow-x-auto rounded-xl border border-slate-200/80 max-h-[460px] overflow-y-auto">
           <table class="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr class="bg-emerald-50/60 text-emerald-950 border-b border-emerald-100 font-semibold text-[11px]">
+            <thead class="sticky top-0 bg-emerald-50/90 backdrop-blur-xs z-10">
+              <tr class="text-emerald-950 border-b border-emerald-200/80 font-semibold text-[11px]">
                 <th class="py-2.5 px-2.5 text-center w-10">No.</th>
                 <th class="py-2.5 px-3">Waktu</th>
                 <th class="py-2.5 px-3">No. Peserta</th>
@@ -368,7 +345,7 @@
               </tr>
             </thead>
             <tbody id="history-table-body" class="divide-y divide-slate-100 text-slate-700">
-              <!-- Item riwayat terisi lewat JS -->
+              <!-- Item terisi lewat JS -->
             </tbody>
           </table>
         </div>
@@ -377,23 +354,19 @@
 
   </main>
 
-  <!-- BOTTOM BAR NAVIGASI (HANYA ICON + TOMBOL RESET DISPLAY + COUNTER LT.2 & LT.3 TANGGAL & SESI AKTIF) -->
+  <!-- BOTTOM BAR NAVIGASI -->
   <nav class="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-md border-t border-emerald-100 shadow-[0_-4px_12px_rgba(0,0,0,0.05)] z-40">
     <div class="max-w-md mx-auto grid grid-cols-12 p-1.5 gap-2 items-center">
-      <!-- Grup Kamera: Tombol Buka Kamera (Icon) + Tombol Reset Tampilan (Icon Sampingnya) -->
       <div class="col-span-6 grid grid-cols-12 gap-1.5 items-center">
-        <!-- Tombol Kamera (Hanya Icon) -->
         <button onclick="switchTab('scanner')" id="tab-btn-scanner" class="col-span-8 flex items-center justify-center py-2.5 px-3 rounded-xl bg-emerald-800 text-white shadow-xs transition active:scale-95" title="Kamera Pemindai">
           <i class="fa-solid fa-camera text-lg"></i>
         </button>
 
-        <!-- Tombol Reset Tampilan (Hanya Reset Tampilan Data, Tanpa Mengganggu Kamera) -->
         <button onclick="resetDisplayOnly()" id="btn-reset-display" class="col-span-4 flex items-center justify-center py-2.5 px-2 rounded-xl bg-slate-100 hover:bg-emerald-100 text-slate-600 hover:text-emerald-800 border border-slate-200/80 transition active:scale-95" title="Reset Tampilan Data">
           <i class="fa-solid fa-arrows-rotate text-sm"></i>
         </button>
       </div>
 
-      <!-- Tombol Log (Icon + Jumlah LT. 2 & LT. 3 Khusus Tanggal & Sesi Saat Itu) -->
       <button onclick="switchTab('history')" id="tab-btn-history" class="col-span-6 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl text-slate-600 hover:text-emerald-800 hover:bg-emerald-50/60 transition active:scale-95 border border-transparent" title="Log Kehadiran">
         <i class="fa-solid fa-clock-rotate-left text-lg flex-shrink-0"></i>
         <div id="counter-box" class="flex flex-col text-left font-mono text-[9px] sm:text-[10px] leading-tight font-extrabold px-1.5 py-0.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200/60">
@@ -408,8 +381,140 @@
     </div>
   </nav>
 
+  <!-- MODAL KONFIGURASI SUPABASE & SKEMA SQL -->
+  <div id="config-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 custom-modal-backdrop transition-opacity duration-200 hidden">
+    <div class="bg-white rounded-3xl p-5 sm:p-6 shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] overflow-y-auto space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-database text-emerald-700 text-lg"></i>
+          <h3 class="text-base font-black text-slate-800">Konfigurasi Database Supabase</h3>
+        </div>
+        <button onclick="toggleConfigModal(false)" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Form Credentials Supabase -->
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Supabase Project URL</label>
+          <input type="text" id="cfg-supabase-url" placeholder="https://xyzcompany.supabase.co" class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono text-[11px]">
+        </div>
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">Supabase Anon Key (Public)</label>
+          <input type="password" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." class="w-full px-3 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono text-[11px]">
+        </div>
+        
+        <div class="flex items-center justify-between pt-1">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="cfg-preview-mode" class="rounded text-emerald-600 focus:ring-emerald-500 h-4 w-4">
+            <span class="text-slate-700 font-semibold">Mode Uji Coba Offline (IS_PREVIEW = true)</span>
+          </label>
+        </div>
+
+        <div class="flex gap-2 pt-2">
+          <button onclick="saveSupabaseSettings()" class="flex-1 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs shadow-xs active:scale-95 transition">
+            Simpan & Hubungkan
+          </button>
+          <button onclick="testSupabaseConnection()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs active:scale-95 transition">
+            Tes Koneksi
+          </button>
+        </div>
+      </div>
+
+      <!-- SQL Schema Generator -->
+      <div class="pt-3 border-t border-slate-100 space-y-2">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-black text-slate-800">Skema SQL Supabase (Attendance Logs)</h4>
+          <button onclick="copySQLSchema()" class="px-2.5 py-1 text-[11px] font-bold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg active:scale-95 transition flex items-center gap-1">
+            <i class="fa-solid fa-copy"></i> <span>Salin SQL</span>
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-500">Jalankan kode SQL berikut di **Supabase Dashboard > SQL Editor** proyek Anda untuk membuat tabel otomatis:</p>
+        <pre id="sql-schema-code" class="bg-slate-900 text-emerald-300 p-3 rounded-xl text-[10px] sm:text-[11px] font-mono overflow-x-auto whitespace-pre leading-relaxed select-all">-- 1. Buat Tabel Attendance Logs
+CREATE TABLE IF NOT EXISTS attendance_logs (
+    id BIGSERIAL PRIMARY KEY,
+    scanned_at TIMESTAMPTZ DEFAULT NOW(),
+    no_peserta VARCHAR(20) UNIQUE NOT NULL,
+    nama VARCHAR(150) NOT NULL,
+    tgl_tes VARCHAR(50),
+    ruang VARCHAR(50),
+    waktu VARCHAR(50),
+    kursi VARCHAR(10),
+    note VARCHAR(255),
+    raw_code TEXT,
+    photo_url TEXT
+);
+
+-- 2. Aktifkan Row Level Security (RLS)
+ALTER TABLE attendance_logs ENABLE ROW LEVEL SECURITY;
+
+-- 3. Kebijakan Akses Baca & Tulis untuk Pengguna Aplikasi (Anon)
+CREATE POLICY "Allow public read access" 
+ON attendance_logs FOR SELECT 
+USING (true);
+
+CREATE POLICY "Allow public insert access" 
+ON attendance_logs FOR INSERT 
+WITH CHECK (true);
+
+-- 4. Indeks untuk Pencarian Cepat
+CREATE INDEX IF NOT EXISTS idx_attendance_no_peserta ON attendance_logs(no_peserta);
+CREATE INDEX IF NOT EXISTS idx_attendance_scanned_at ON attendance_logs(scanned_at DESC);</pre>
+      </div>
+    </div>
+  </div>
+
   <!-- SCRIPT LOGIKA UTAMA -->
   <script>
+    // =========================================================================
+    // KONFIGURASI SUPABASE DEFAULT & LOCAL STORAGE
+    // =========================================================================
+    // Kredensial default atau yang tersimpan di LocalStorage browser
+    const STORAGE_KEY_URL = "scan_supabase_url";
+    const STORAGE_KEY_KEY = "scan_supabase_key";
+    const STORAGE_KEY_PREVIEW = "scan_is_preview";
+
+    // Silakan isi langsung di sini atau lewat tombol 'Koneksi Supabase' di header
+    let SUPABASE_URL = localStorage.getItem(STORAGE_KEY_URL) || "https://your-project-id.supabase.co";
+    let SUPABASE_ANON_KEY = localStorage.getItem(STORAGE_KEY_KEY) || "your-anon-key";
+    let IS_PREVIEW = localStorage.getItem(STORAGE_KEY_PREVIEW) === "true";
+
+    // Inisialisasi Supabase Client
+    let supabaseClient = null;
+    function initSupabase() {
+      try {
+        if (!IS_PREVIEW && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes("your-project-id")) {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          updateDatabaseBadge("online", "Supabase Cloud Terhubung");
+        } else {
+          supabaseClient = null;
+          updateDatabaseBadge("preview", IS_PREVIEW ? "Mode Preview (Lokal)" : "Supabase Belum Diatur");
+        }
+      } catch (err) {
+        console.error("Gagal inisialisasi Supabase:", err);
+        updateDatabaseBadge("error", "Koneksi Error");
+      }
+    }
+
+    function updateDatabaseBadge(status, text) {
+      const badge = document.getElementById("badge-db-status");
+      const label = document.getElementById("label-db-backend");
+      if (!badge || !label) return;
+
+      label.innerText = text;
+      if (status === "online") {
+        badge.className = "inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+      } else if (status === "preview") {
+        badge.className = "inline-block w-2 h-2 rounded-full bg-amber-400";
+      } else {
+        badge.className = "inline-block w-2 h-2 rounded-full bg-rose-500";
+      }
+    }
+
+    // Offset Formula Spreadsheet: ASCII = Kode Angka - 348
+    const ASCII_OFFSET = 348;
+
     let html5QrCode = null;
     let currentParticipantData = null;
     let availableCameras = [];
@@ -417,7 +522,7 @@
     let activeMediaTrack = null;
     let zoomCapabilities = null;
 
-    // Pengaman duplikasi scan cepat berulang (cooldown)
+    // Cooldown scan duplikat
     let lastScannedRaw = "";
     let lastScannedTimestamp = 0;
     const DUPLICATE_COOLDOWN_MS = 3000;
@@ -435,7 +540,7 @@
     ];
 
     /* -------------------------------------------------------------------------
-       0. TOAST NOTIFIKASI ELEGAN TANPA ALERT BROWSER
+       0. TOAST NOTIFIKASI ELEGAN
     ------------------------------------------------------------------------- */
     let toastTimeout = null;
     function showToast(message, type = "success") {
@@ -481,7 +586,6 @@
       const shortRuangSesi = formatRuangSesiCompact(record.ruang, record.waktu);
       document.getElementById("modal-saved-kursiruang").innerText = `${record.kursi} (${shortRuangSesi})`;
 
-      // Muat Foto Peserta di Modal
       const modalPhoto = document.getElementById("modal-saved-photo");
       const modalFallback = document.getElementById("modal-saved-photo-fallback");
       if (record.photoUrl) {
@@ -504,7 +608,6 @@
       }, 2100);
     }
 
-    // Handler saat gambar foto peserta gagal dimuat
     function handlePhotoError() {
       const img = document.getElementById("val-foto-peserta");
       const placeholder = document.getElementById("val-foto-placeholder");
@@ -513,7 +616,7 @@
     }
 
     /* -------------------------------------------------------------------------
-       1. ALGORITMA DEKODER SUBSTITUSI SPREADSHEET (Offset -348)
+       1. DEKODER FORMULA ASCII (Offset -348)
     ------------------------------------------------------------------------- */
     function decodeSubstitutedNumbers(inputStr) {
       if (!inputStr) return "";
@@ -544,7 +647,7 @@
     }
 
     /* -------------------------------------------------------------------------
-       2. LOGIKA PEMBEDAHAN NOMOR PESERTA (10 DIGIT)
+       2. PEMBEDAHAN NOMOR PESERTA (10 DIGIT)
     ------------------------------------------------------------------------- */
     function parseParticipantNumber(numberStr) {
       if (!numberStr) return null;
@@ -553,25 +656,19 @@
 
       const pNum = clean.substring(0, 10);
 
-      // 1. 6 Digit Pertama (YYMMDD): 261028 -> 28 OKTOBER 2026 + Nama Hari
       const yy = pNum.substring(0, 2);
       const mm = parseInt(pNum.substring(2, 4), 10);
       const dd = parseInt(pNum.substring(4, 6), 10);
       const tahunNum = parseInt("20" + yy, 10);
       const namaBulan = (mm >= 1 && mm <= 12) ? NAMA_BULAN[mm] : `BULAN-${mm}`;
-      
-      // Short date format DD/MM/YYYY
       const shortDate = `${String(dd).padStart(2, '0')}/${String(mm).padStart(2, '0')}/${tahunNum}`;
 
-      // Hitung Hari Otomatis dan Cek Tanggal Hari Ini
       let namaHari = "";
       let isToday = false;
       try {
         const dObj = new Date(tahunNum, mm - 1, dd);
         if (!isNaN(dObj.getTime())) {
           namaHari = NAMA_HARI[dObj.getDay()] + ", ";
-
-          // Bandingkan dengan tanggal hari ini
           const now = new Date();
           isToday = (
             now.getFullYear() === tahunNum &&
@@ -583,12 +680,11 @@
 
       const tglTes = `${namaHari}${dd} ${namaBulan} ${tahunNum}`;
 
-      // 2. Digit ke-7 (Ruang & Sesi) dengan format "Lantai 2" / "Lantai 3" dan "Pagi (08.30)" / "Siang (13.30)"
       const digit7 = pNum.charAt(6);
       let ruang = "Lantai -";
       let waktu = "-";
       let lantai = "";
-      let sessionType = ""; // "pagi" atau "siang"
+      let sessionType = "";
 
       switch(digit7) {
         case '1':
@@ -622,14 +718,10 @@
           sessionType = "khusus";
       }
 
-      // Validasi waktu scan saat ini
-      // Sesi Pagi: 07.00 - 09.00 (420 s/d 540 menit)
-      // Sesi Siang: 12.30 - 14.30 (750 s/d 870 menit)
       let isTimeValid = true;
       if (sessionType === "pagi" || sessionType === "siang") {
         const now = new Date();
         const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
         if (sessionType === "pagi") {
           isTimeValid = (currentMinutes >= 420 && currentMinutes <= 540);
         } else if (sessionType === "siang") {
@@ -637,7 +729,6 @@
         }
       }
 
-      // 3. 2 Digit Terakhir (Nomor Kursi)
       const kursi = pNum.substring(8, 10);
 
       return {
@@ -655,7 +746,7 @@
     }
 
     /* -------------------------------------------------------------------------
-       3. PIPELINE PEMROSESAN QR & LOGIKA AUTO-SAVE
+       3. PEMROSESAN QR & AUTO-SAVE
     ------------------------------------------------------------------------- */
     function processQRContent(rawText) {
       let decodedFull = decodeSubstitutedNumbers(rawText);
@@ -666,21 +757,14 @@
 
       if (decodedFull.includes("-")) {
         const parts = decodedFull.split("-");
-        if (parts.length >= 2) {
-          noPeserta = parts[1].trim();
-        }
-        if (parts.length >= 3) {
-          namaPeserta = parts.slice(2).join("-").trim();
-        }
+        if (parts.length >= 2) noPeserta = parts[1].trim();
+        if (parts.length >= 3) namaPeserta = parts.slice(2).join("-").trim();
       } else {
         const match = decodedFull.match(/\b\d{10}\b/);
         if (match) noPeserta = match[0];
       }
 
       const parsedInfo = parseParticipantNumber(noPeserta);
-
-      // Ekstraksi 12 Digit Pertama dari hasil scan untuk link foto
-      // Mengambil digit angka dari hasil decoded atau rawText
       const digitsOnly = (decodedFull.replace(/\D/g, '') || rawText.replace(/\D/g, ''));
       let photoUrl = "";
       if (digitsOnly.length >= 12) {
@@ -708,7 +792,6 @@
 
     function handleScanSuccess(rawText) {
       const nowTs = Date.now();
-      // Cegah scan berulang pada QR yang sama dalam durasi 3 detik
       if (rawText === lastScannedRaw && (nowTs - lastScannedTimestamp) < DUPLICATE_COOLDOWN_MS) {
         return;
       }
@@ -719,14 +802,12 @@
       const data = processQRContent(rawText);
       currentParticipantData = data;
 
-      // Update Tampilan DOM
       document.getElementById("val-no-peserta").innerText = data.noPeserta;
       document.getElementById("val-nama").innerText = data.nama;
       document.getElementById("val-tgl-tes").innerText = data.tglTes;
       document.getElementById("val-waktu").innerText = data.waktu;
       document.getElementById("val-no-kursi").innerText = data.kursi;
       
-      // Pastikan tulisan RUANG tetap ada berdampingan dengan nama lantai (contoh: RUANG LANTAI 2)
       if (data.ruang && data.ruang !== "-") {
         const textRuang = data.ruang.toUpperCase();
         document.getElementById("val-ruang-bawah-kursi").innerText = textRuang.startsWith("RUANG") 
@@ -736,7 +817,6 @@
         document.getElementById("val-ruang-bawah-kursi").innerText = "RUANG";
       }
 
-      // Tampilkan Foto Peserta
       const imgPhoto = document.getElementById("val-foto-peserta");
       const placeholderPhoto = document.getElementById("val-foto-placeholder");
       if (data.photoUrl) {
@@ -748,7 +828,6 @@
         placeholderPhoto.classList.remove("hidden");
       }
 
-      // Logika Peringatan Tanggal Tes
       const boxTgl = document.getElementById("box-tgl-tes");
       const badgeWarning = document.getElementById("badge-tgl-warning");
       const lblTgl = document.getElementById("lbl-tgl-tes");
@@ -767,7 +846,6 @@
         badgeWarning.classList.add("hidden");
       }
 
-      // Logika Peringatan Waktu / Sesi Tes
       const boxWaktu = document.getElementById("box-waktu");
       const badgeWaktuWarning = document.getElementById("badge-waktu-warning");
       const lblWaktu = document.getElementById("lbl-waktu");
@@ -788,44 +866,33 @@
 
       const warningNoticeManual = document.getElementById("warning-notice-manual");
       const btnSave = document.getElementById("btn-save-record");
-
-      // Cek apakah ada ketidaksesuaian tanggal ATAU waktu
       const hasScheduleIssue = isDateAlert || isTimeAlert;
-
-      // Periksa apakah peserta sudah pernah tersimpan sebelumnya
       const isAlreadyRecorded = checkIsAlreadyRecorded(data.noPeserta);
 
       if (isAlreadyRecorded) {
-        // Data sudah ada di database / riwayat: KUNCI TOTAL TOMBOL SIMPAN
         warningNoticeManual.classList.add("hidden");
         btnSave.disabled = true;
         showToast("Peserta (" + data.noPeserta + ") SUDAH PERNAH diverifikasi sebelumnya!", "warning");
       } else if (hasScheduleIssue) {
-        // ADA KENDALA JADWAL & BELUM TERCATAT: Izinkan simpan manual jika disetujui petugas
         btnSave.disabled = false;
         warningNoticeManual.classList.remove("hidden");
         showToast("Jadwal tidak sesuai! Auto-save dihentikan.", "warning");
       } else {
-        // JADWAL COCOK, TEPAT WAKTU & BELUM TERCATAT: LANGSUNG MASUK KE DATABASE TANPA KLIK
         warningNoticeManual.classList.add("hidden");
         btnSave.disabled = true;
-        
-        // Eksekusi auto-save tanpa perlu konfirmasi alert
         executeSave(false);
       }
     }
 
-    // Fungsi cek apakah nomor peserta sudah ada di riwayat
     function checkIsAlreadyRecorded(noPeserta) {
       if (!noPeserta || noPeserta === "-") return false;
       const cleanNo = String(noPeserta).trim().replace(/\D/g, '');
       return scanHistory.some(item => {
-        const itemNo = String(item.noPeserta || "").trim().replace(/\D/g, '');
+        const itemNo = String(item.noPeserta || item.no_peserta || "").trim().replace(/\D/g, '');
         return itemNo === cleanNo;
       });
     }
 
-    // Audio Beep Sintetis
     function playBeepSound() {
       try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -842,7 +909,7 @@
     }
 
     /* -------------------------------------------------------------------------
-       4. KONTROL SCANNER, KAMERA, DAN LENSA
+       4. KONTROL KAMERA
     ------------------------------------------------------------------------- */
     async function loadAvailableCameras() {
       try {
@@ -853,7 +920,6 @@
           selectEl.innerHTML = "";
 
           let preferredCamId = null;
-          
           cameras.forEach((cam, idx) => {
             const labelLower = cam.label.toLowerCase();
             const option = document.createElement("option");
@@ -863,18 +929,13 @@
             const isWide = /wide|ultra|0\.5x|0\.6x|super/i.test(labelLower);
             const isBack = /back|rear|belakang|environment/i.test(labelLower);
 
-            if (isWide) {
-              displayLabel += " (Ultra-Wide)";
-            } else if (isBack) {
-              displayLabel += " (Kamera Utama 1x)";
-            }
+            if (isWide) displayLabel += " (Ultra-Wide)";
+            else if (isBack) displayLabel += " (Kamera Utama 1x)";
 
             option.text = displayLabel;
             selectEl.appendChild(option);
 
-            if (!preferredCamId && isBack && !isWide) {
-              preferredCamId = cam.id;
-            }
+            if (!preferredCamId && isBack && !isWide) preferredCamId = cam.id;
           });
 
           if (!preferredCamId) {
@@ -891,8 +952,7 @@
     }
 
     function toggleCameraSettings() {
-      const panel = document.getElementById("cam-settings-panel");
-      panel.classList.toggle("hidden");
+      document.getElementById("cam-settings-panel").classList.toggle("hidden");
     }
 
     async function changeCamera(cameraId) {
@@ -924,16 +984,14 @@
           }
         }
       } catch (err) {
-        console.warn("Fitur zoom perangkat keras tidak didukung peramban:", err);
+        console.warn("Fitur zoom tidak didukung:", err);
       }
     }
 
     function applyZoom(zoomLevel) {
       if (activeMediaTrack && zoomCapabilities) {
         try {
-          activeMediaTrack.applyConstraints({
-            advanced: [{ zoom: parseFloat(zoomLevel) }]
-          });
+          activeMediaTrack.applyConstraints({ advanced: [{ zoom: parseFloat(zoomLevel) }] });
         } catch (e) {
           console.warn("Gagal menerapkan zoom:", e);
         }
@@ -957,7 +1015,6 @@
         ? { deviceId: { exact: selectedCameraId } }
         : { facingMode: "environment" };
 
-      // Hitung ukuran kotak bidik dinamis agar pas memenuhi kontainer bujur sangkar
       const readerEl = document.getElementById("reader");
       const boxSize = readerEl ? Math.min(readerEl.clientWidth, readerEl.clientHeight) - 16 : 220;
 
@@ -1008,15 +1065,11 @@
       }
     }
 
-    /* -------------------------------------------------------------------------
-       FUNGSI RESET TAMPILAN (Dipanggil lewat Icon Samping Kamera)
-    ------------------------------------------------------------------------- */
     function clearScanDisplay() {
       currentParticipantData = null;
       lastScannedRaw = "";
       lastScannedTimestamp = 0;
 
-      // Reset data teks kartu verifikasi
       document.getElementById("val-no-peserta").innerText = "-";
       document.getElementById("val-nama").innerText = "-";
       document.getElementById("val-tgl-tes").innerText = "-";
@@ -1024,18 +1077,14 @@
       document.getElementById("val-no-kursi").innerText = "--";
       document.getElementById("val-ruang-bawah-kursi").innerText = "RUANG";
 
-      // Reset Foto Peserta ke Avatar Standby
       const imgPhoto = document.getElementById("val-foto-peserta");
       const placeholderPhoto = document.getElementById("val-foto-placeholder");
       if (imgPhoto) {
         imgPhoto.src = "";
         imgPhoto.classList.add("hidden");
       }
-      if (placeholderPhoto) {
-        placeholderPhoto.classList.remove("hidden");
-      }
+      if (placeholderPhoto) placeholderPhoto.classList.remove("hidden");
 
-      // Reset kotak tanggal ke kondisi default
       const boxTgl = document.getElementById("box-tgl-tes");
       const badgeTgl = document.getElementById("badge-tgl-warning");
       const lblTgl = document.getElementById("lbl-tgl-tes");
@@ -1045,7 +1094,6 @@
       if (valTgl) valTgl.className = "text-[13px] sm:text-[15px] font-bold text-slate-800 block mt-0.5 leading-snug truncate";
       if (badgeTgl) badgeTgl.classList.add("hidden");
 
-      // Reset kotak waktu/sesi ke kondisi default
       const boxWaktu = document.getElementById("box-waktu");
       const badgeWaktu = document.getElementById("badge-waktu-warning");
       const lblWaktu = document.getElementById("lbl-waktu");
@@ -1055,7 +1103,6 @@
       if (valWaktu) valWaktu.className = "text-xs sm:text-sm font-bold text-slate-800 block mt-0.5 leading-snug truncate";
       if (badgeWaktu) badgeWaktu.classList.add("hidden");
 
-      // Reset input catatan & tombol simpan manual
       const scanNote = document.getElementById("scan-note");
       if (scanNote) scanNote.value = "";
       const btnSave = document.getElementById("btn-save-record");
@@ -1070,16 +1117,15 @@
     }
 
     /* -------------------------------------------------------------------------
-       5. SIMPAN DATA KE SPREADSHEET (AUTO & MANUAL)
+       5. SIMPAN KE DATABASE (SUPABASE / PREVIEW)
     ------------------------------------------------------------------------- */
     function saveCurrentRecord(isManual = false) {
       executeSave(isManual);
     }
 
-    function executeSave(isManual = false) {
+    async function executeSave(isManual = false) {
       if (!currentParticipantData || currentParticipantData.noPeserta === "-") return;
       
-      // Validasi ganda: Pastikan nomor peserta belum tersimpan di riwayat
       if (checkIsAlreadyRecorded(currentParticipantData.noPeserta)) {
         showToast("Data peserta ini sudah tersimpan, tidak disimpan ulang.", "warning");
         document.getElementById("btn-save-record").disabled = true;
@@ -1115,181 +1161,146 @@
         photoUrl: currentParticipantData.photoUrl || ""
       };
 
-      if (IS_PREVIEW) {
-        // Mode Preview: Simpan ke memori lokal
+      if (IS_PREVIEW || !supabaseClient) {
         scanHistory.unshift(record);
         renderHistoryTable();
-        
-        // Tampilkan notifikasi pop-up besar dan jelas
         showLargeSavedNotification(record);
-        showToast(isManual ? "Tersimpan manual ke kehadiran." : "Tersimpan otomatis ke database!", "success");
+        showToast(isManual ? "Tersimpan manual ke kehadiran (Lokal)." : "Tersimpan otomatis ke memori lokal!", "success");
         
-        // Reset form catatan dan nonaktifkan tombol simpan
         document.getElementById("scan-note").value = "";
         document.getElementById("btn-save-record").disabled = true;
         document.getElementById("warning-notice-manual").classList.add("hidden");
       } else {
-        // Mode Live: Kirim langsung ke Google Sheets (GAS)
         const btn = document.getElementById("btn-save-record");
         const originalText = document.getElementById("lbl-save-button").innerText;
         btn.disabled = true;
-        document.getElementById("lbl-save-button").innerText = "Menyimpan...";
+        document.getElementById("lbl-save-button").innerText = "Menyimpan ke Supabase...";
 
-        fetch(GAS_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            action: "saveScanLog",
-            timestamp: timestamp,
-            noPeserta: record.noPeserta,
+        try {
+          const payload = {
+            no_peserta: record.noPeserta,
             nama: record.nama,
-            tglTes: record.tglTes,
+            tgl_tes: record.tglTes,
             ruang: record.ruang,
             waktu: record.waktu,
             kursi: record.kursi,
             note: customNote,
-            rawCode: currentParticipantData.raw
-          })
-        })
-        .then(res => res.json())
-        .then(data => {
+            raw_code: currentParticipantData.raw,
+            photo_url: record.photoUrl
+          };
+
+          const { data, error } = await supabaseClient
+            .from('attendance_logs')
+            .insert([payload])
+            .select();
+
           document.getElementById("lbl-save-button").innerText = originalText;
-          if (data.status === "success") {
-            btn.disabled = true;
-            // Tampilkan notifikasi pop-up besar dan jelas
-            showLargeSavedNotification(record);
-            showToast("Berhasil tersimpan di database!", "success");
-            document.getElementById("scan-note").value = "";
-            document.getElementById("warning-notice-manual").classList.add("hidden");
-            // Sinkronkan ulang riwayat dan penghitung LT. 2 & LT. 3
-            refreshData();
-          } else if (data.status === "duplicate") {
-            // Jika server mendeteksi duplikat, pastikan tombol tetap terkunci disable
-            btn.disabled = true;
-            showToast("Data sudah ada di Google Sheet (tidak disimpan ulang).", "warning");
-            document.getElementById("scan-note").value = "";
-            document.getElementById("warning-notice-manual").classList.add("hidden");
-            refreshData();
+
+          if (error) {
+            // Handle error duplicate key constraint postgres
+            if (error.code === '23505') {
+              btn.disabled = true;
+              showToast("Peserta sudah ada di database Supabase (duplikasi dicegah).", "warning");
+              document.getElementById("scan-note").value = "";
+              document.getElementById("warning-notice-manual").classList.add("hidden");
+              refreshData(true);
+            } else {
+              btn.disabled = false;
+              showToast("Gagal simpan ke Supabase: " + error.message, "error");
+            }
           } else {
-            btn.disabled = false;
-            showToast("Gagal menyimpan: " + data.message, "error");
+            btn.disabled = true;
+            showLargeSavedNotification(record);
+            showToast("Berhasil tersimpan di Supabase Cloud!", "success");
+            document.getElementById("scan-note").value = "";
+            document.getElementById("warning-notice-manual").classList.add("hidden");
+            refreshData(true);
           }
-        })
-        .catch(err => {
+        } catch (err) {
           btn.disabled = false;
           document.getElementById("lbl-save-button").innerText = originalText;
-          showToast("Gagal koneksi ke Google Apps Script.", "error");
-        });
+          showToast("Gagal jaringan ke Supabase: " + err.message, "error");
+        }
       }
     }
 
     /* -------------------------------------------------------------------------
        6. LOGIKA SESI SAAT INI & FILTER TANGGAL & SESI AKTIF
     ------------------------------------------------------------------------- */
-    // Menentukan sesi yang sedang berjalan berdasarkan jam sistem saat ini
     function getCurrentActiveSession() {
       const now = new Date();
       const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-      // Sesi Pagi: 06.00 s/d 11.59 (360 s/d 719 menit)
-      // Sesi Siang: 12.00 s/d 18.00 (720 s/d 1080 menit)
       if (currentMinutes >= 360 && currentMinutes < 720) {
         return { key: "pagi", label: "SESI PAGI" };
       } else if (currentMinutes >= 720 && currentMinutes <= 1080) {
         return { key: "siang", label: "SESI SIANG" };
       } else if (currentMinutes < 360) {
-        // Sebelum jam 6 pagi (dini hari/persiapan), hitung sesi pagi
         return { key: "pagi", label: "SESI PAGI" };
       } else {
-        // Lewat jam 18.00 malam, hitung sesi siang (sesi terakhir hari ini)
         return { key: "siang", label: "SESI SIANG" };
       }
     }
 
-    // Helper untuk membandingkan apakah tanggal suatu item sama dengan tanggal hari ini
     function isItemSameAsToday(item) {
       const now = new Date();
       const todayYear = now.getFullYear();
-      const todayMonth = now.getMonth() + 1; // 1-12
-      const todayDate = now.getDate(); // 1-31
+      const todayMonth = now.getMonth() + 1;
+      const todayDate = now.getDate();
 
-      // Format target untuk pencocokan cepat
       const strYMD = `${todayYear}-${String(todayMonth).padStart(2, '0')}-${String(todayDate).padStart(2, '0')}`;
       const strDMY = `${String(todayDate).padStart(2, '0')}/${String(todayMonth).padStart(2, '0')}/${todayYear}`;
       const strYYMMDD = `${String(todayYear).slice(-2)}${String(todayMonth).padStart(2, '0')}${String(todayDate).padStart(2, '0')}`;
 
-      // 1. Prioritas Utama: Cek langsung dari 6 digit pertama No. Peserta (YYMMDD = Tanggal Tes Peserta)
-      const cleanNo = String(item.noPeserta || "").trim().replace(/\D/g, '');
-      if (cleanNo.length >= 6) {
-        if (cleanNo.startsWith(strYYMMDD)) {
-          return true;
-        }
+      const noPeserta = item.noPeserta || item.no_peserta || "";
+      const cleanNo = String(noPeserta).trim().replace(/\D/g, '');
+      if (cleanNo.length >= 6 && cleanNo.startsWith(strYYMMDD)) {
+        return true;
       }
 
-      // 2. Cek dari kolom Tanggal Tes (tglTes / tglTesShort)
-      const tglStr = String(item.tglTesShort || item.tglTes || "").trim();
+      const tglStr = String(item.tglTesShort || item.tgl_tes || item.tglTes || "").trim();
       if (tglStr && tglStr !== "-") {
-        if (tglStr.includes(strDMY) || tglStr.includes(strYMD)) {
-          return true;
-        }
+        if (tglStr.includes(strDMY) || tglStr.includes(strYMD)) return true;
 
-        // Cek pola angka tanggal/bulan/tahun pada string tanggal tes (DD/MM/YYYY atau DD-MM-YYYY)
         const matchDMY = tglStr.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
         if (matchDMY) {
           const d = parseInt(matchDMY[1], 10);
           const m = parseInt(matchDMY[2], 10);
           let y = parseInt(matchDMY[3], 10);
           if (y < 100) y += 2000;
-          if (d === todayDate && m === todayMonth && y === todayYear) {
-            return true;
-          }
+          if (d === todayDate && m === todayMonth && y === todayYear) return true;
         }
 
-        // Cek teks nama bulan bahasa Indonesia pada kolom tanggal tes
         const namaBulanIni = NAMA_BULAN[todayMonth];
         if (namaBulanIni && tglStr.toUpperCase().includes(namaBulanIni)) {
           const regexDate = new RegExp(`(^|[^0-9])${todayDate}([^0-9]|$)`);
-          if (regexDate.test(tglStr)) {
-            return true;
-          }
+          if (regexDate.test(tglStr)) return true;
         }
       }
-
       return false;
     }
 
-    // Helper untuk mendeteksi apakah sesi suatu item adalah "pagi" atau "siang"
     function getItemSessionType(item) {
-      // 1. Cek dari properti sessionType jika ada
       if (item.sessionType) {
         const st = String(item.sessionType).toLowerCase();
         if (st.includes("pagi")) return "pagi";
         if (st.includes("siang")) return "siang";
       }
 
-      // 2. Ekstraksi dari teks kolom waktu/sesi
       const waktuStr = String(item.waktu || "").toUpperCase();
-      if (waktuStr.includes("PAGI") || waktuStr.includes("08.30") || waktuStr.includes("08:30")) {
-        return "pagi";
-      }
-      if (waktuStr.includes("SIANG") || waktuStr.includes("13.30") || waktuStr.includes("13:30")) {
-        return "siang";
-      }
+      if (waktuStr.includes("PAGI") || waktuStr.includes("08.30") || waktuStr.includes("08:30")) return "pagi";
+      if (waktuStr.includes("SIANG") || waktuStr.includes("13.30") || waktuStr.includes("13:30")) return "siang";
 
-      // 3. Ekstraksi dari digit ke-7 No. Peserta:
-      // 1 = Lt 2 Pagi, 2 = Lt 3 Pagi
-      // 3 = Lt 2 Siang, 4 = Lt 3 Siang
-      const cleanNo = String(item.noPeserta || "").trim().replace(/\D/g, '');
+      const noPeserta = item.noPeserta || item.no_peserta || "";
+      const cleanNo = String(noPeserta).trim().replace(/\D/g, '');
       if (cleanNo.length >= 7) {
         const d7 = cleanNo.charAt(6);
         if (d7 === '1' || d7 === '2') return "pagi";
         if (d7 === '3' || d7 === '4') return "siang";
       }
-
       return "";
     }
 
-    // Ekstraksi terpadu tanggal tes & tipe sesi
     function getParticipantDateAndSession(item) {
       const isToday = isItemSameAsToday(item);
       const sessionType = getItemSessionType(item);
@@ -1299,23 +1310,22 @@
     /* -------------------------------------------------------------------------
        7. TABEL RIWAYAT, PENCARIAN & STATISTIK JUMLAH
     ------------------------------------------------------------------------- */
-    // Helper Format Jam Saja dari Timestamp "YYYY-MM-DD HH:mm:ss"
     function formatTimeOnly(ts) {
       if (!ts || ts === "-") return "-";
-      const parts = String(ts).trim().split(" ");
-      if (parts.length >= 2) {
-        return parts[1]; // Ambil HH:mm:ss
+      if (ts.includes("T")) {
+        const dateObj = new Date(ts);
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
       }
+      const parts = String(ts).trim().split(" ");
+      if (parts.length >= 2) return parts[1];
       return ts;
     }
 
-    // Helper Format Tanggal Ringkas (Short Date DD/MM/YYYY)
     function formatShortDate(fullTgl, noPeserta) {
       if (!fullTgl || fullTgl === "-") return "-";
-      // Jika sudah berformat short date
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(fullTgl)) return fullTgl;
-
-      // Ekstrak dari no peserta jika tersedia
       if (noPeserta && noPeserta.length >= 6) {
         const clean = noPeserta.replace(/\D/g, '');
         if (clean.length >= 6) {
@@ -1325,28 +1335,20 @@
           return `${dd}/${mm}/20${yy}`;
         }
       }
-
-      // Fallback: hapus nama hari
-      if (fullTgl.includes(",")) {
-        return fullTgl.split(",")[1].trim();
-      }
+      if (fullTgl.includes(",")) return fullTgl.split(",")[1].trim();
       return fullTgl;
     }
 
-    // Helper Format Ruang & Sesi Ringkas: "LT 2 Pagi" / "LT 3 Siang"
     function formatRuangSesiCompact(ruang, waktu, noPeserta = "") {
       let lt = "";
       const ruangStr = String(ruang || "").toUpperCase();
 
-      // 1. Ekstraksi dari teks ruang ("Lantai 2", "LT. 2", "LT 2", dll.)
       if (ruangStr.includes("2") || ruangStr.includes("LT. 2") || ruangStr.includes("LT.2") || ruangStr.includes("LANTAI 2") || ruangStr.includes("LT 2")) {
         lt = "LT 2";
       } else if (ruangStr.includes("3") || ruangStr.includes("LT. 3") || ruangStr.includes("LT.3") || ruangStr.includes("LANTAI 3") || ruangStr.includes("LT 3")) {
         lt = "LT 3";
       }
 
-      // 2. Jika belum terdeteksi dari teks ruang, ekstrak dari digit ke-7 Nomor Peserta
-      // Digit 7: 1 & 3 = Lantai 2; 2 & 4 = Lantai 3
       if (!lt && noPeserta) {
         const cleanNo = String(noPeserta).trim().replace(/\D/g, '');
         if (cleanNo.length >= 7) {
@@ -1356,7 +1358,6 @@
           else lt = `LT ${d7}`;
         }
       }
-
       if (!lt) lt = "LT -";
 
       let sesi = "";
@@ -1366,7 +1367,6 @@
       } else if (waktuStr.includes("SIANG") || waktuStr.includes("13.30") || waktuStr.includes("13:30")) {
         sesi = "Siang";
       } else {
-        // Fallback cek digit ke-7 jika teks waktu kosong
         if (noPeserta) {
           const cleanNo = String(noPeserta).trim().replace(/\D/g, '');
           if (cleanNo.length >= 7) {
@@ -1377,17 +1377,14 @@
         }
         if (!sesi) sesi = waktuStr || "-";
       }
-
       return `${lt} ${sesi}`.trim();
     }
 
-    // Penghitungan Jumlah Kehadiran Khusus TANGGAL HARI INI dan SESI AKTIF SAAT INI
     function updateLocationCounters() {
       const activeSession = getCurrentActiveSession();
       let lt2CurrentSessionCount = 0;
       let lt3CurrentSessionCount = 0;
 
-      // Update Teks Tanggal & Sesi di Header Ringkasan Kehadiran
       const now = new Date();
       const hariTeks = NAMA_HARI[now.getDay()];
       const tglTeks = `${String(now.getDate()).padStart(2, '0')} ${NAMA_BULAN[now.getMonth() + 1]} ${now.getFullYear()}`;
@@ -1399,30 +1396,20 @@
 
       scanHistory.forEach(item => {
         const info = getParticipantDateAndSession(item);
-
-        // Filter ketat: Hanya hitung jika tanggal adalah HARI INI dan SESI adalah SESI AKTIF SAAT INI
         if (info.isToday && info.sessionType === activeSession.key) {
-          // Deteksi Lantai
           let isLt2 = false;
           let isLt3 = false;
-
-          // 1. Prioritas dari Digit ke-7 Nomor Peserta:
-          // 1 & 3 = Lantai 2; 2 & 4 = Lantai 3
-          const cleanNo = String(item.noPeserta || "").trim().replace(/\D/g, '');
+          const noPeserta = item.noPeserta || item.no_peserta || "";
+          const cleanNo = String(noPeserta).trim().replace(/\D/g, '');
           if (cleanNo.length >= 7) {
             const d7 = cleanNo.charAt(6);
             if (d7 === '1' || d7 === '3') isLt2 = true;
             if (d7 === '2' || d7 === '4') isLt3 = true;
           }
-
-          // 2. Fallback dari teks kolom Ruang
           if (!isLt2 && !isLt3) {
             const ruangText = String(item.ruang || "").toUpperCase();
-            if (ruangText.includes("2") || ruangText.includes("LT. 2") || ruangText.includes("LT.2") || ruangText.includes("LANTAI 2") || ruangText.includes("LT 2")) {
-              isLt2 = true;
-            } else if (ruangText.includes("3") || ruangText.includes("LT. 3") || ruangText.includes("LT.3") || ruangText.includes("LANTAI 3") || ruangText.includes("LT 3")) {
-              isLt3 = true;
-            }
+            if (ruangText.includes("2") || ruangText.includes("LANTAI 2") || ruangText.includes("LT 2")) isLt2 = true;
+            else if (ruangText.includes("3") || ruangText.includes("LANTAI 3") || ruangText.includes("LT 3")) isLt3 = true;
           }
 
           if (isLt2) lt2CurrentSessionCount++;
@@ -1432,13 +1419,11 @@
 
       const totalCurrentSession = lt2CurrentSessionCount + lt3CurrentSessionCount;
 
-      // 1. Perbarui Indikator di Bar Bawah Layar
       const elLt2 = document.getElementById("count-lt2");
       const elLt3 = document.getElementById("count-lt3");
       if (elLt2) elLt2.innerText = lt2CurrentSessionCount;
       if (elLt3) elLt3.innerText = lt3CurrentSessionCount;
 
-      // 2. Perbarui Kartu Statistik Besar di Tab Log Kehadiran
       const statTotal = document.getElementById("stat-total-session");
       const statLt2 = document.getElementById("stat-lt2-session");
       const statLt3 = document.getElementById("stat-lt3-session");
@@ -1460,21 +1445,30 @@
 
       dataList.forEach((item, index) => {
         const noTampil = item.noUrut || (scanHistory.length - index);
-        const jamSaja = formatTimeOnly(item.timestamp);
-        const tglRingkas = item.tglTesShort || formatShortDate(item.tglTes, item.noPeserta);
-        const ruangSesiRingkas = formatRuangSesiCompact(item.ruang, item.waktu, item.noPeserta);
+        const timeField = item.timestamp || item.scanned_at || "-";
+        const jamSaja = formatTimeOnly(timeField);
+        const noPeserta = item.noPeserta || item.no_peserta || "-";
+        const nama = item.nama || "-";
+        const tglTes = item.tglTes || item.tgl_tes || "-";
+        const ruang = item.ruang || "-";
+        const waktu = item.waktu || "-";
+        const kursi = item.kursi || "--";
+        const note = item.note || "-";
+
+        const tglRingkas = item.tglTesShort || formatShortDate(tglTes, noPeserta);
+        const ruangSesiRingkas = formatRuangSesiCompact(ruang, waktu, noPeserta);
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-emerald-50/40 transition border-b border-slate-100 text-[11px]";
         tr.innerHTML = `
           <td class="py-2.5 px-2.5 text-center font-bold text-slate-500">${noTampil}</td>
           <td class="py-2.5 px-3 text-slate-500 whitespace-nowrap font-mono font-bold">${jamSaja}</td>
-          <td class="py-2.5 px-3 font-mono font-bold text-emerald-900">${item.noPeserta}</td>
-          <td class="py-2.5 px-3 font-semibold text-slate-800">${item.nama}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-emerald-900">${noPeserta}</td>
+          <td class="py-2.5 px-3 font-semibold text-slate-800">${nama}</td>
           <td class="py-2.5 px-3 text-slate-600 whitespace-nowrap font-medium">${tglRingkas}</td>
           <td class="py-2.5 px-3 text-emerald-900 font-bold whitespace-nowrap"><span class="px-1.5 py-0.5 rounded bg-emerald-100/70 text-emerald-800">${ruangSesiRingkas}</span></td>
-          <td class="py-2.5 px-3 text-center font-mono font-black text-emerald-700 bg-emerald-50/50">${item.kursi}</td>
-          <td class="py-2.5 px-3 text-slate-500">${item.note}</td>
+          <td class="py-2.5 px-3 text-center font-mono font-black text-emerald-700 bg-emerald-50/50">${kursi}</td>
+          <td class="py-2.5 px-3 text-slate-500">${note}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -1482,38 +1476,57 @@
 
     function filterHistoryTable() {
       const query = document.getElementById("history-search").value.toLowerCase();
-      const filtered = scanHistory.filter(item => 
-        item.noPeserta.toLowerCase().includes(query) ||
-        item.nama.toLowerCase().includes(query) ||
-        item.note.toLowerCase().includes(query)
-      );
+      const filtered = scanHistory.filter(item => {
+        const noP = (item.noPeserta || item.no_peserta || "").toLowerCase();
+        const nm = (item.nama || "").toLowerCase();
+        const nt = (item.note || "").toLowerCase();
+        return noP.includes(query) || nm.includes(query) || nt.includes(query);
+      });
       renderHistoryTable(filtered);
     }
 
-    // Fungsi Pengambilan Data Awal & Sinkronisasi
-    function refreshData(silent = false) {
-      if (IS_PREVIEW) {
+    async function refreshData(silent = false) {
+      if (IS_PREVIEW || !supabaseClient) {
         renderHistoryTable();
-      } else {
-        if (!silent) {
-          const tbody = document.getElementById("history-table-body");
-          if (tbody && scanHistory.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-emerald-700"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Memuat data kehadiran...</td></tr>`;
-          }
+        return;
+      }
+
+      const tbody = document.getElementById("history-table-body");
+      if (!silent && tbody && scanHistory.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-emerald-700"><i class="fa-solid fa-spinner fa-spin mr-1.5"></i> Memuat data dari Supabase...</td></tr>`;
+      }
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('attendance_logs')
+          .select('*')
+          .order('scanned_at', { ascending: false });
+
+        if (error) {
+          console.error("Supabase fetch error:", error);
+          showToast("Gagal mengambil data Supabase: " + error.message, "error");
+          renderHistoryTable();
+          return;
         }
 
-        fetch(GAS_URL + "?action=getScanLogs")
-          .then(res => res.json())
-          .then(data => {
-            if (data.status === "success") {
-              scanHistory = data.logs || [];
-              renderHistoryTable();
-            }
-          })
-          .catch(err => {
-            console.warn("Gagal menyinkronkan data dari spreadsheet:", err);
-            renderHistoryTable();
-          });
+        scanHistory = (data || []).map((row, idx) => ({
+          noUrut: data.length - idx,
+          id: row.id,
+          timestamp: row.scanned_at,
+          noPeserta: row.no_peserta,
+          nama: row.nama,
+          tglTes: row.tgl_tes,
+          ruang: row.ruang,
+          waktu: row.waktu,
+          kursi: row.kursi,
+          note: row.note,
+          photoUrl: row.photo_url
+        }));
+
+        renderHistoryTable();
+      } catch (err) {
+        console.warn("Kesalahan koneksi Supabase:", err);
+        renderHistoryTable();
       }
     }
 
@@ -1525,12 +1538,20 @@
       let csv = "No.,Waktu Verifikasi,No Peserta,Nama Peserta,Tgl Tes,Ruang,Waktu Ujian,Kursi,Catatan\n";
       scanHistory.forEach((r, idx) => {
         const noVal = r.noUrut || (idx + 1);
-        csv += `"${noVal}","${r.timestamp}","${r.noPeserta}","${r.nama}","${r.tglTes}","${r.ruang}","${r.waktu}","${r.kursi}","${r.note}"\n`;
+        const timeVal = r.timestamp || r.scanned_at || "-";
+        const noP = r.noPeserta || r.no_peserta || "-";
+        const nm = r.nama || "-";
+        const tgl = r.tglTes || r.tgl_tes || "-";
+        const rng = r.ruang || "-";
+        const wkt = r.waktu || "-";
+        const krs = r.kursi || "-";
+        const nt = r.note || "-";
+        csv += `"${noVal}","${timeVal}","${noP}","${nm}","${tgl}","${rng}","${wkt}","${krs}","${nt}"\n`;
       });
       const encodedUri = encodeURI("data:text/csv;charset=utf-8," + csv);
       const link = document.createElement("a");
       link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `kehadiran_ujian_${Date.now()}.csv`);
+      link.setAttribute("download", `kehadiran_supabase_${Date.now()}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1563,89 +1584,88 @@
       }
     }
 
-    // Inisialisasi Aplikasi Saat Halaman Dibuka Pertama Kali
+    /* -------------------------------------------------------------------------
+       8. MODAL KONFIGURASI SUPABASE
+    ------------------------------------------------------------------------- */
+    function toggleConfigModal(show) {
+      const modal = document.getElementById("config-modal");
+      if (show) {
+        document.getElementById("cfg-supabase-url").value = SUPABASE_URL.includes("your-project") ? "" : SUPABASE_URL;
+        document.getElementById("cfg-supabase-key").value = SUPABASE_ANON_KEY.includes("your-anon") ? "" : SUPABASE_ANON_KEY;
+        document.getElementById("cfg-preview-mode").checked = IS_PREVIEW;
+        modal.classList.remove("hidden");
+      } else {
+        modal.classList.add("hidden");
+      }
+    }
+
+    function saveSupabaseSettings() {
+      const urlInput = document.getElementById("cfg-supabase-url").value.trim();
+      const keyInput = document.getElementById("cfg-supabase-key").value.trim();
+      const isPreview = document.getElementById("cfg-preview-mode").checked;
+
+      SUPABASE_URL = urlInput || "https://your-project-id.supabase.co";
+      SUPABASE_ANON_KEY = keyInput || "your-anon-key";
+      IS_PREVIEW = isPreview;
+
+      localStorage.setItem(STORAGE_KEY_URL, SUPABASE_URL);
+      localStorage.setItem(STORAGE_KEY_KEY, SUPABASE_ANON_KEY);
+      localStorage.setItem(STORAGE_KEY_PREVIEW, isPreview ? "true" : "false");
+
+      initSupabase();
+      toggleConfigModal(false);
+      showToast("Pengaturan Supabase disimpan!", "success");
+      refreshData(false);
+    }
+
+    async function testSupabaseConnection() {
+      const urlInput = document.getElementById("cfg-supabase-url").value.trim();
+      const keyInput = document.getElementById("cfg-supabase-key").value.trim();
+
+      if (!urlInput || !keyInput) {
+        showToast("Isi URL dan Anon Key terlebih dahulu.", "warning");
+        return;
+      }
+
+      try {
+        const testClient = window.supabase.createClient(urlInput, keyInput);
+        const { data, error } = await testClient.from('attendance_logs').select('count', { count: 'exact', head: true });
+        
+        if (error) {
+          showToast("Koneksi gagal: " + error.message, "error");
+        } else {
+          showToast("Koneksi Supabase Sukses!", "success");
+        }
+      } catch (e) {
+        showToast("Error tes koneksi: " + e.message, "error");
+      }
+    }
+
+    function copySQLSchema() {
+      const sqlText = document.getElementById("sql-schema-code").innerText;
+      const dummy = document.createElement("textarea");
+      document.body.appendChild(dummy);
+      dummy.value = sqlText;
+      dummy.select();
+      document.execCommand("copy");
+      document.body.removeChild(dummy);
+      showToast("Kode SQL disalin ke clipboard!", "success");
+    }
+
+    // Inisialisasi Aplikasi Saat Start
     window.addEventListener("DOMContentLoaded", () => {
-      // 1. Render antarmuka awal
+      initSupabase();
       renderHistoryTable();
-      
-      // 2. Muat konfigurasi lensa kamera
       loadAvailableCameras();
 
-      // 3. Tarik seluruh log & hitung kehadiran dari Google Sheets langsung saat start-up
-      if (!IS_PREVIEW) {
+      if (!IS_PREVIEW && supabaseClient) {
         refreshData(false);
       }
 
-      // Interval periodik tiap 1 menit untuk memastikan status sesi aktif tetap sinkron dengan jam HP
       setInterval(() => {
         updateLocationCounters();
       }, 60000);
     });
-  </script>
-
-  <!-- PWA: SERVICE WORKER & TOMBOL PASANG -->
-  <script>
-    (function () {
-      // 1. Daftarkan Service Worker (butuh HTTPS; GitHub Pages sudah HTTPS)
-      if ("serviceWorker" in navigator) {
-        window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./sw.js").catch(function (e) {
-            console.warn("Service Worker gagal didaftarkan:", e);
-          });
-        });
-      }
-
-      var banner = document.getElementById("install-banner");
-      var btnInstall = document.getElementById("btn-install");
-      var btnClose = document.getElementById("btn-install-close");
-      var txt = document.getElementById("install-text");
-      var deferredPrompt = null;
-
-      var isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-      var isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
-                  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-      var dismissed = false;
-      try { dismissed = sessionStorage.getItem("pwa-banner-closed") === "1"; } catch (e) {}
-
-      function showBanner() {
-        if (!isStandalone && !dismissed) banner.classList.remove("hidden");
-      }
-
-      // 2. Android / Chrome / Edge: tangkap prompt pemasangan resmi
-      window.addEventListener("beforeinstallprompt", function (e) {
-        e.preventDefault();
-        deferredPrompt = e;
-        showBanner();
-      });
-
-      btnInstall.addEventListener("click", async function () {
-        if (deferredPrompt) {
-          deferredPrompt.prompt();
-          await deferredPrompt.userChoice;
-          deferredPrompt = null;
-          banner.classList.add("hidden");
-        } else if (isIOS) {
-          showToast("Ketuk ikon Bagikan, lalu pilih 'Tambahkan ke Layar Utama'.", "success");
-        }
-      });
-
-      btnClose.addEventListener("click", function () {
-        banner.classList.add("hidden");
-        try { sessionStorage.setItem("pwa-banner-closed", "1"); } catch (e) {}
-      });
-
-      window.addEventListener("appinstalled", function () {
-        banner.classList.add("hidden");
-        showToast("Aplikasi berhasil dipasang!", "success");
-      });
-
-      // 3. iPhone/iPad (Safari) tidak punya prompt otomatis: tampilkan petunjuk manual
-      if (isIOS && !isStandalone) {
-        txt.textContent = "Untuk memasang: ketuk ikon Bagikan di Safari, lalu 'Tambahkan ke Layar Utama'.";
-        btnInstall.classList.add("hidden");
-        showBanner();
-      }
-    })();
   </script>
 </body>
 </html>
