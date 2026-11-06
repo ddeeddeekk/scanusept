@@ -1159,7 +1159,7 @@ CREATE INDEX IF NOT EXISTS idx_attendance_scanned_at ON attendance_logs(scanned_
           } else {
             btn.disabled = true;
             showLargeSavedNotification(record);
-            showToast("Berhasil tersimpan di Supabase Cloud!", "success");
+            showToast("Berhasil tersimpan di database!", "success");
             document.getElementById("scan-note").value = "";
             document.getElementById("warning-notice-manual").classList.add("hidden");
             refreshData(true);
