@@ -476,9 +476,9 @@ CREATE INDEX IF NOT EXISTS idx_attendance_scanned_at ON attendance_logs(scanned_
     const STORAGE_KEY_PREVIEW = "scan_is_preview";
 
     // Silakan isi langsung di sini atau lewat tombol 'Koneksi Supabase' di header
-    let SUPABASE_URL = localStorage.getItem(STORAGE_KEY_URL) || "https://your-project-id.supabase.co";
-    let SUPABASE_ANON_KEY = localStorage.getItem(STORAGE_KEY_KEY) || "your-anon-key";
-    let IS_PREVIEW = localStorage.getItem(STORAGE_KEY_PREVIEW) === "true";
+    let SUPABASE_URL = localStorage.getItem(STORAGE_KEY_URL) || "https://cjndrjrgjsqlrgboeieq.supabase.co";
+    let SUPABASE_ANON_KEY = localStorage.getItem(STORAGE_KEY_KEY) || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNqbmRyanJnanNxbHJnYm9laWVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM5MTAyMDQsImV4cCI6MjEwOTQ4NjIwNH0.3pNZA28YXpFZ-MQMd3oYEy87CifIb_lTo81sKeTUHCY";
+    let IS_PREVIEW = localStorage.getItem(STORAGE_KEY_PREVIEW) === "false";
 
     // Inisialisasi Supabase Client
     let supabaseClient = null;
