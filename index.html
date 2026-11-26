@@ -1091,7 +1091,7 @@ CREATE INDEX IF NOT EXISTS idx_attendance_scanned_at ON attendance_logs(scanned_
 
       let customNote = document.getElementById("scan-note").value.trim();
       if (!customNote) {
-        customNote = isManual ? "Disetujui Manual" : "Auto-Save Valid";
+        customNote = isManual ? "Disetujui Manual" : "Auto-Save";
       }
 
       const record = {
